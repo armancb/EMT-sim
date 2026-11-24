@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Grad-B Drift</title>
+    <meta name="description" content="Interactive 3D simulation of grad-B drift in a tilted Helmholtz coil" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='11' fill='none' stroke='%23FF9A3C' stroke-width='3'/%3E%3C/svg%3E" />
+    <script type="module" crossorigin src="./assets/index-BA1c8ptO.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-DNqD45Jg.css">
+  </head>
+  <body data-chapter="1">
+    <canvas id="scene"></canvas>
+    <div id="labels"></div>
+
+    <!-- chapter bar -->
+    <nav class="chapter-bar card" aria-label="Chapters">
+      <button data-ch="1" class="active"><span class="num">1</span> <span class="t">The Experiment</span></button>
+      <span class="arrow">→</span>
+      <button data-ch="2"><span class="num">2</span> <span class="t">Why It Drifts</span></button>
+      <span class="arrow">→</span>
+      <button data-ch="3"><span class="num">3</span> <span class="t">The Tokamak</span></button>
+      <span class="arrow">→</span>
+      <button data-ch="4"><span class="num">4</span> <span class="t">Virtual Lab</span></button>
+    </nav>
+
+    <p id="narration" class="narration"></p>
+
+    <div class="corner-tags">
+      <span class="tag ch1-only ch2-only ch4-only" id="slowmo">×10⁸ slow motion</span>
+      <span class="tag ch3-only">Stylised · not to scale</span>
+    </div>
+
+    <!-- about -->
+    <button id="about-btn" class="icon-btn about-btn" title="About" aria-label="About">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></svg>
+    </button>
+    <div id="about" class="card popover" hidden>
+      <h3>About this simulation</h3>
+      <p>Based on Thrysøe et al. (2025), “Measuring grad-B drift in a model of a magnetized torus using a modified Helmholtz coil”, <em>Phys. Educ.</em> 60 045035.</p>
+      <p>DOI <a href="https://doi.org/10.1088/1361-6552/ade18f" target="_blank" rel="noopener">10.1088/1361-6552/ade18f</a></p>
+      <p class="muted">Coil specs: 3B Scientific U8481500. Trajectories use a phase-exact Boris integrator in SI units.</p>
+      <p class="muted keys">
+        <kbd>1</kbd>–<kbd>4</kbd> chapters · <kbd>←</kbd><kbd>→</kbd> step · <kbd>Space</kbd> play/pause ·
+        <kbd>P</kbd> presentation · <kbd>F</kbd> fullscreen
+      </p>
+    </div>
+
+    <!-- ============ Chapter 1 controls ============ -->
+    <aside class="card panel ch1-only" id="panel-1">
+      <div class="chips" id="presets">
+        <button data-preset="uniform">Uniform field</button>
+        <button data-preset="paper">Paper's setup</button>
+        <button data-preset="exaggerated">Exaggerated drift</button>
+      </div>
+
+      <div class="control">
+        <div class="control-head"><span class="label">Coil tilt</span><span class="value" id="tilt-val"></span></div>
+        <div class="slider-wrap">
+          <input type="range" id="tilt" min="0" max="40" step="0.1" value="0" aria-label="Coil tilt" />
+          <span class="tick" id="paper-tick"><span>Paper</span></span>
+        </div>
+        <div class="scale"><span>Parallel</span><span>Tokamak-like</span></div>
+      </div>
+
+      <div class="control">
+        <div class="control-head"><span class="label">Field strength</span><span class="value" id="current-val"></span></div>
+        <input type="range" id="current" min="1.2" max="3" step="0.05" value="2" aria-label="Field strength" />
+      </div>
+
+      <div class="control">
+        <div class="control-head"><span class="label">Beam energy</span><span class="value" id="voltage-val"></span></div>
+        <input type="range" id="voltage" min="150" max="300" step="5" value="250" aria-label="Beam energy" />
+      </div>
+
+      <div class="control">
+        <div class="control-head"><span class="label">Particle</span><span class="value" id="particle-hint"></span></div>
+        <div class="segmented" id="particle">
+          <button data-particle="electron" class="active">Electron</button>
+          <button data-particle="positron">Positron</button>
+        </div>
+      </div>
+
+      <div class="transport">
+        <button class="icon-btn" id="play" title="Play / pause (Space)" aria-label="Play or pause">
+          <svg class="i-pause" viewBox="0 0 24 24"><path d="M9 6v12M15 6v12"/></svg>
+          <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z" class="fill"/></svg>
+        </button>
+        <button class="icon-btn" id="reset" title="Reset" aria-label="Reset">
+          <svg viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3M4.5 4.5v4h4"/></svg>
+        </button>
+      </div>
+    </aside>
+
+    <!-- readout -->
+    <div class="card readout ch1-only" id="readout">
+      <div class="row"><span class="k">Orbit size</span><span class="v" id="ro-orbit"></span></div>
+      <div class="row" id="ro-row2"><span class="k">Shift per loop</span><span class="v" id="ro-shift"></span><span class="note">(measured)</span></div>
+      <div class="row" id="ro-row3">
+        <span class="k">Theory predicts</span><span class="v" id="ro-pred"></span>
+        <span class="badge" id="ro-badge" tabindex="0"></span>
+        <span class="tooltip" id="ro-tip">Big orbits feel a changing gradient, so the simple formula gets less accurate.</span>
+      </div>
+      <div class="row closes" id="ro-closes"><span class="k">Loop closes</span><span class="badge ok">✓</span></div>
+    </div>
+
+    <!-- view toggles + camera -->
+    <div class="viewbar ch1-only" id="viewbar">
+      <div class="card toolrow">
+        <button class="icon-btn toggle" data-view="lines" title="Field lines">
+          <svg viewBox="0 0 24 24"><path d="M3 7c6-3 12-3 18 0M3 12h18M3 17c6 3 12 3 18 0"/></svg>
+        </button>
+        <button class="icon-btn toggle" data-view="wash" title="Field strength">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z" class="fill"/></svg>
+        </button>
+        <button class="icon-btn toggle" data-view="centre" title="Guiding centre">
+          <svg viewBox="0 0 24 24"><path d="M12 3v3M12 9v2M12 14v2M12 19v2"/><circle cx="12" cy="12" r="1.2" class="fill"/></svg>
+        </button>
+        <button class="icon-btn toggle" data-view="ruler" title="Ruler">
+          <svg viewBox="0 0 24 24"><rect x="8" y="3" width="8" height="18" rx="1.5"/><path d="M8 7h3M8 11h4M8 15h3M8 19h4"/></svg>
+        </button>
+      </div>
+      <div class="card toolrow cams">
+        <button data-cam="front" class="active">Front</button>
+        <button data-cam="side">Side</button>
+        <button data-cam="free">Free</button>
+      </div>
+    </div>
+
+    <!-- ============ Chapter 2 controls ============ -->
+    <aside class="card panel ch2-only" id="panel-2">
+      <div class="control">
+        <div class="control-head"><span class="label">Gradient</span><span class="value" id="grad-val"></span></div>
+        <input type="range" id="gradient" min="0" max="40" step="0.5" value="40" aria-label="Gradient" />
+        <div class="scale"><span>None</span><span>Strong</span></div>
+      </div>
+      <div class="legend">
+        <span><i class="sw tight"></i>Tight turn</span>
+        <span><i class="sw wide"></i>Wide turn</span>
+        <span><i class="sw ghost"></i>Closed circle</span>
+      </div>
+      <div class="stepper">
+        <div class="dots" id="beat-dots"><i></i><i></i><i></i><i></i></div>
+        <button class="primary" id="beat-next">Next ▸</button>
+      </div>
+    </aside>
+
+    <!-- ============ Chapter 3 controls ============ -->
+    <aside class="card panel ch3-only" id="panel-3">
+      <div class="stages" id="stages">
+        <span data-stage="A">Drift</span><span data-stage="B">Loss</span><span data-stage="C">Confined</span>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="plasma-current" />
+        <span class="track"><span class="knob"></span></span>
+        <span>Add plasma current</span>
+      </label>
+      <div class="stepper">
+        <button class="icon-btn" id="tok-reset" title="Reset" aria-label="Reset">
+          <svg viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3M4.5 4.5v4h4"/></svg>
+        </button>
+        <button class="primary" id="tok-step">Step ▸</button>
+      </div>
+    </aside>
+
+    <!-- ============ Chapter 4 controls ============ -->
+    <aside class="card panel lab ch4-only" id="panel-4">
+      <div class="lab-chart" id="lab-chart"></div>
+      <div class="legend lab-legend">
+        <span><i class="sw dot"></i>Measured</span>
+        <span><i class="sw real"></i>Real coil shape</span>
+        <span><i class="sw simple"></i>Simple doughnut model</span>
+      </div>
+      <div class="stepper">
+        <span class="lab-status" id="lab-status"></span>
+        <button class="primary" id="lab-run">Run current sweep</button>
+      </div>
+    </aside>
+
+    <div id="fps" hidden></div>
+
+  </body>
+</html>
